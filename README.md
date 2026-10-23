@@ -1,7 +1,7 @@
 # Onyx Boox - Obsidian - Fast Ink Bridge
 
-> [!IMPORTANT] Project is Vibecoded
-> Never use vibecoded projects in production. This is just a personal Proof of Concept.
+> [!CAUTION]
+> Project is Vibecoded - Never use vibecoded projects in production. This is just a personal Proof of Concept.
 
 Patch an Obsidian (Capacitor) APK to add a BOOX e-ink pen bridge, exposed to the page as
 `window.onyx`. Fast, display-drawn pen strokes work out of the box, and every Obsidian plugin can
