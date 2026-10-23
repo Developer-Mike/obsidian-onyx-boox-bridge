@@ -1,0 +1,9 @@
+{
+  "id": "onyx-bridge",
+  "name": "BOOX Ink Bridge Demo",
+  "version": "0.1.0",
+  "minAppVersion": "1.0.0",
+  "description": "Demonstrates driving the patched BOOX fast-ink API (window.onyx) from a plugin.",
+  "author": "you",
+  "isDesktopOnly": false
+}

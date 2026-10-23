@@ -1,0 +1,10 @@
+# Patch output
+dist/
+
+# Python
+__pycache__/
+*.pyc
+
+# Example plugin
+node_modules/
+examples/obsidian-onyx-bridge/main.js
