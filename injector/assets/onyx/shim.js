@@ -143,7 +143,7 @@
 
   var autoInk = {
     on: false, held: false, down: false, timer: 0, has: false,
-    minX: 0, minY: 0, maxX: 0, maxY: 0, width: 3
+    minX: 0, minY: 0, maxX: 0, maxY: 0, width: 3, filter: null
   };
 
   function markStroke(e) {
@@ -167,6 +167,12 @@
 
   function onPenDown(e) {
     if (!autoInk.on || !isPen(e)) return;
+    // Filter hook: return false to cancel this stroke (e.g. the pen touched a UI element).
+    if (autoInk.filter) {
+      var ok = true;
+      try { ok = autoInk.filter(e); } catch (err) { ok = true; }
+      if (ok === false) { autoInk.down = false; return; }
+    }
     if (autoInk.timer) { clearTimeout(autoInk.timer); autoInk.timer = 0; }
     if (!autoInk.held) { try { raw.enablePost(false); } catch (err) {} autoInk.held = true; }
     autoInk.has = false;
@@ -190,6 +196,7 @@
 
   function onPenUp(e) {
     if (!autoInk.on || !isPen(e)) return;
+    if (!autoInk.down) return; // no stroke in progress (cancelled or filtered)
     autoInk.down = false;
     markStroke(e);
     try { raw.penUp(); } catch (err) {}
@@ -357,11 +364,11 @@
 
     // ---- automatic fast writing ----
     // On by default. `setAutoInk(false)` hands control to a plugin; `setAutoInkWidth` retunes.
-    setAutoInk: function (on, width) {
-      if (width !== undefined && width !== null && +width > 0) {
-        autoInk.width = +width;
-      }
-      return on ? startAutoInk() : stopAutoInk();
+    setAutoInk: function (on) { return on ? startAutoInk() : stopAutoInk(); },
+    // Called on each pen pointerdown; return false to cancel the stroke. Pass null to clear.
+    setAutoInkFilter: function (fn) {
+      autoInk.filter = (typeof fn === "function") ? fn : null;
+      return true;
     },
     isAutoInk: function () { return autoInk.on; },
     setAutoInkWidth: function (w) {

@@ -37,7 +37,7 @@ export default class OnyxBridgeDemo extends Plugin {
     }
     ox.setAutoInkWidth(this.settings.width);
     if (this.settings.enabled) {
-      ox.setAutoInk(true, this.settings.width);
+      ox.setAutoInk(true);
     }
     this.updateRibbon();
     console.log("[onyx-bridge] ready; fast ink =", ox.isAutoInk());
@@ -60,7 +60,8 @@ export default class OnyxBridgeDemo extends Plugin {
       return;
     }
     this.settings.enabled = !ox.isAutoInk();
-    ox.setAutoInk(this.settings.enabled, this.settings.width);
+    ox.setAutoInkWidth(this.settings.width);
+    ox.setAutoInk(this.settings.enabled);
     this.updateRibbon();
     new Notice("Fast ink " + (this.settings.enabled ? "on" : "off"));
     void this.saveSettings();
@@ -102,7 +103,8 @@ class OnyxSettingTab extends PluginSettingTab {
           const ox = getOnyx();
           if (ox) {
             if (v && !ox.isAvailable()) ox.connect();
-            ox.setAutoInk(v, this.plugin.settings.width);
+            ox.setAutoInkWidth(this.plugin.settings.width);
+            ox.setAutoInk(v);
           }
           await this.plugin.saveSettings();
         })

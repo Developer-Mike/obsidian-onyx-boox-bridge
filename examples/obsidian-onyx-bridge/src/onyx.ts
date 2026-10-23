@@ -78,7 +78,8 @@ export interface OnyxApi {
   mapDigitizerToScreen(x: number, y: number): number[];
 
   // automatic fast writing
-  setAutoInk(on: boolean, width?: number): boolean;
+  setAutoInk(on: boolean): boolean;
+  setAutoInkFilter(fn: ((e: PointerEvent) => boolean) | null): boolean;
   isAutoInk(): boolean;
   setAutoInkWidth(width: number): number;
   autoInkState(): string;

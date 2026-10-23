@@ -39,9 +39,6 @@ devices (app-fed strokes):
 * ~450 ms after the pen lifts, the frames are released and the stroke area is repainted, revealing
   Obsidian's own ink.
 
-This is done by a small automatic session in `shim.js`, enabled by default. A plugin can turn it off
-and drive the primitives itself.
-
 The transaction codes and payloads were read from this tablet's framework
 (`android.onyx.ViewUpdateHelper`) and cross-checked against the Onyx SDK's `AppTouchRender`.
 
@@ -126,12 +123,19 @@ onyx.UpdateMode   // DU 1, GU 2, GC4 3, A2 4, DEFAULT 5, REGAL 6, REGAL_PLUS 9,
 ### Automatic fast writing
 
 ```js
-onyx.setAutoInk(true);        // default: on. false hands control to your plugin
-onyx.setAutoInk(false);
-onyx.setAutoInk(true, 8);     // arm with a specific width
-onyx.setAutoInkWidth(6);      // retune while running
+onyx.setAutoInk(true);        // start; stays on until you call setAutoInk(false)
+onyx.setAutoInk(false);       // manual disable
+onyx.setAutoInkWidth(6);      // stroke width, physical px
+onyx.setAutoInkFilter(fn);    // per-stroke cancel hook (below); null clears it
 onyx.isAutoInk();             // boolean
 onyx.autoInkState();          // "{"on":true,"held":false,"width":3}"
+```
+
+`setAutoInkFilter(fn)` is called on each pen `pointerdown`; return `false` to cancel that stroke
+(e.g. the pen touched a UI element), `true`/undefined to draw:
+
+```js
+onyx.setAutoInkFilter(e => !e.target.closest(".some-ui"));
 ```
 
 ### App-fed stroke (what the auto session uses)
