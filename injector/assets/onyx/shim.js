@@ -6,11 +6,9 @@
  * so it is safe to evaluate repeatedly and it re-installs after a page reload. The automatic pen
  * session is OFF by default — a plugin starts it with `setAutoInk(true)`.
  *
- * Fast strokes work by feeding the display the pen points ourselves: while the stylus is down the
- * WebView's frames are held and `moveTo`/`quadTo`/`penUp` are sent in screen coordinates, so the
- * display paints the stroke itself; a short pause after the pen lifts releases the frames and
- * repaints, revealing Obsidian's own ink. A plugin can turn this off and drive the primitives
- * directly.
+ * Fast writing: while the stylus is down the app's frames are held and the stroke is fed to the
+ * display as `moveTo`/`quadTo`/`penUp` in screen coordinates, so the display paints it; a short pause
+ * after the pen lifts releases the frames and repaints, revealing the app's own ink.
  */
 (function () {
   "use strict";
@@ -21,7 +19,6 @@
   if (!raw || typeof raw.isAvailable !== "function") {
     return;
   }
-  // Idempotent: if this raw object is already wrapped, do nothing.
   if (window.onyx && window.onyx.__isOnyxShim === true && window.onyx.__native === raw) {
     return;
   }
@@ -39,6 +36,9 @@
     DU_QUALITY: 2305, A2_QUALITY: 2308, DU4: 2312, MONO_A2: 33554436
   };
   var RegionMode = { MULTI: 0, SINGLE: 1 };
+
+  var BREAK_MS = 450;      // release + reveal this long after the pen lifts
+  var FAILSAFE_MS = 4000;  // never leave the display held if a pen-up is missed
 
   function csv(a) {
     if (a === null || a === undefined) return "";
@@ -136,13 +136,12 @@
 
   function clientX(e) { return (e.clientX !== undefined) ? e.clientX : (e.x || 0); }
   function clientY(e) { return (e.clientY !== undefined) ? e.clientY : (e.y || 0); }
+  function isPen(e) { return !e.pointerType || e.pointerType === "pen"; }
 
   // ---- automatic pen session --------------------------------------------------
-  // The display is driven directly: hold the app's frames, feed it the pen points in screen pixels,
-  // and reveal Obsidian's ink a short pause after the pen lifts.
 
   var autoInk = {
-    on: false, held: false, down: false, timer: 0, has: false,
+    on: false, held: false, down: false, timer: 0, maxTimer: 0, has: false,
     minX: 0, minY: 0, maxX: 0, maxY: 0, width: 3, filter: null
   };
 
@@ -163,7 +162,9 @@
     }
   }
 
-  function isPen(e) { return !e.pointerType || e.pointerType === "pen"; }
+  function setPen(state) {
+    try { return raw.setPenState(state); } catch (e) { return false; }
+  }
 
   function onPenDown(e) {
     if (!autoInk.on || !isPen(e)) return;
@@ -175,8 +176,12 @@
     }
     if (autoInk.timer) { clearTimeout(autoInk.timer); autoInk.timer = 0; }
     if (!autoInk.held) { try { raw.enablePost(false); } catch (err) {} autoInk.held = true; }
+    setPen(PenState.START);
+    setPen(PenState.DRAW);
     autoInk.has = false;
     autoInk.down = true;
+    if (autoInk.maxTimer) clearTimeout(autoInk.maxTimer);
+    autoInk.maxTimer = setTimeout(forceRelease, FAILSAFE_MS);
     var k = physPerCss();
     var off = viewOffset();
     try { raw.setStrokeWidth(autoInk.width); } catch (err) {}
@@ -196,12 +201,13 @@
 
   function onPenUp(e) {
     if (!autoInk.on || !isPen(e)) return;
-    if (!autoInk.down) return; // no stroke in progress (cancelled or filtered)
+    if (!autoInk.down) return;
     autoInk.down = false;
     markStroke(e);
     try { raw.penUp(); } catch (err) {}
+    if (autoInk.maxTimer) { clearTimeout(autoInk.maxTimer); autoInk.maxTimer = 0; }
     if (autoInk.timer) clearTimeout(autoInk.timer);
-    autoInk.timer = setTimeout(reveal, 450);
+    autoInk.timer = setTimeout(reveal, BREAK_MS);
   }
 
   function reveal() {
@@ -220,6 +226,16 @@
     autoInk.has = false;
   }
 
+  function forceRelease() {
+    autoInk.maxTimer = 0;
+    autoInk.down = false;
+    if (autoInk.timer) { clearTimeout(autoInk.timer); autoInk.timer = 0; }
+    if (autoInk.held) { try { raw.enablePost(true); } catch (err) {} autoInk.held = false; }
+    setPen(PenState.STOP);
+    try { raw.repaintEverything(); } catch (err) {}
+    autoInk.has = false;
+  }
+
   function startAutoInk() {
     if (autoInk.on) return true;
     try {
@@ -228,7 +244,7 @@
       raw.setRegionExcludes("0,0,0,0", true);
       raw.setRegionLimit("0,0," + ss[0] + "," + ss[1], true);
       raw.setPenState(PenState.START);
-      raw.setPenState(PenState.DRAW); // SDK sets DRAWING while raw drawing is active
+      raw.setPenState(PenState.DRAW);
       raw.setStrokeColor(-16777216);
       raw.setStrokeStyle(Style.PENCIL);
       raw.setStrokeWidth(autoInk.width);
@@ -238,6 +254,7 @@
     window.addEventListener("pointermove", onPenMove, true);
     window.addEventListener("pointerup", onPenUp, true);
     window.addEventListener("pointercancel", onPenUp, true);
+    window.addEventListener("blur", forceRelease, true);
     emit("autostart", {});
     return true;
   }
@@ -249,7 +266,9 @@
     window.removeEventListener("pointermove", onPenMove, true);
     window.removeEventListener("pointerup", onPenUp, true);
     window.removeEventListener("pointercancel", onPenUp, true);
+    window.removeEventListener("blur", forceRelease, true);
     if (autoInk.timer) { clearTimeout(autoInk.timer); autoInk.timer = 0; }
+    if (autoInk.maxTimer) { clearTimeout(autoInk.maxTimer); autoInk.maxTimer = 0; }
     if (autoInk.held) { try { raw.enablePost(true); } catch (err) {} autoInk.held = false; }
     try { raw.setPenState(PenState.PAUSE); raw.setPenState(PenState.STOP); raw.release(); } catch (e) { /* ignore */ }
     emit("autostop", {});
@@ -307,7 +326,7 @@
     getStrokeParameters: function (style) { return nums(raw.getStrokeParameters(style | 0)); },
     setStrokeParameters: function (style, params) { return raw.setStrokeParameters(style | 0, csv(params)); },
 
-    // ---- app-fed stroke: the display draws from points you supply ----
+    // ---- app-fed stroke ----
     moveTo: function (x, y, width) { return raw.moveTo(+x, +y, +width); },
     quadTo: function (x, y, mode) { return raw.quadTo(+x, +y, mode === undefined ? UpdateMode.DU : mode | 0); },
     penUp: function () { return raw.penUp(); },
@@ -363,9 +382,7 @@
     },
 
     // ---- automatic fast writing ----
-    // On by default. `setAutoInk(false)` hands control to a plugin; `setAutoInkWidth` retunes.
     setAutoInk: function (on) { return on ? startAutoInk() : stopAutoInk(); },
-    // Called on each pen pointerdown; return false to cancel the stroke. Pass null to clear.
     setAutoInkFilter: function (fn) {
       autoInk.filter = (typeof fn === "function") ? fn : null;
       return true;
@@ -399,6 +416,7 @@
       raw.setAutoSync(o.autoSync !== false);
       if (o.hold) raw.enablePost(false);
       raw.setPenState(PenState.START);
+      raw.setPenState(PenState.DRAW);
       emit("sessionstart", { config: o });
       return true;
     },
@@ -417,8 +435,6 @@
   window.onyx = api;
   window.__onyxShim = api;
 
-  // Off by default: the patch only exposes the API. A plugin (or the page) starts fast writing with
-  // `onyx.setAutoInk(true)`, or by setting `window.__onyxAutoInk = true` before the page loads.
   if (window.__onyxAutoInk === true) {
     try { startAutoInk(); } catch (e) { /* ignore */ }
   }

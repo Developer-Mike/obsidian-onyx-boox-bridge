@@ -1,0 +1,9 @@
+{
+  "id": "starlight-pdf-bridge",
+  "name": "Starlight PDF Bridge",
+  "version": "0.1.0",
+  "minAppVersion": "1.0.0",
+  "description": "Feeds Starlight PDF's canvas pen strokes to the BOOX display.",
+  "author": "mika.dev",
+  "isDesktopOnly": false
+}

@@ -7,4 +7,4 @@ __pycache__/
 
 # Example plugin
 node_modules/
-examples/obsidian-onyx-bridge/main.js
+examples/*/main.js
